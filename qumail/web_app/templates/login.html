@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>Login with your existing email account</h3>
+
+<form method="post" class="mt-3">
+  <input type="hidden" name="mode" value="simple" />
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Simple Login</h5>
+      <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label">Provider</label>
+          <select class="form-select" name="provider">
+            <option value="gmail" selected>Gmail</option>
+            <option value="yahoo">Yahoo</option>
+            <option value="outlook">Outlook / Office 365</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Email</label>
+          <input class="form-control" name="email" placeholder="you@example.com" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Password / App Password</label>
+          <input class="form-control" type="password" name="password" />
+        </div>
+        <div class="col-md-1">
+          <button class="btn btn-primary w-100" type="submit">Login</button>
+        </div>
+      </div>
+      <p class="text-muted mt-2">Tip: Many providers require an App Password for SMTP/IMAP clients.</p>
+    </div>
+  </div>
+
+  <details>
+    <summary>Advanced (manual SMTP/IMAP settings)</summary>
+    <div class="alert alert-secondary mt-3">If Simple Login doesn’t work for your provider, set hosts/ports manually.</div>
+    <input type="hidden" name="mode" value="advanced" />
+    <div class="row">
+      <div class="col-md-6">
+        <h5>SMTP (Outgoing Mail)</h5>
+        <div class="mb-3">
+          <label class="form-label">Host</label>
+          <input class="form-control" name="smtp_host" placeholder="smtp.gmail.com" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Port</label>
+          <input class="form-control" name="smtp_port" value="587" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Username (your email)</label>
+          <input class="form-control" name="smtp_user" placeholder="you@example.com" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password / App Password</label>
+          <input class="form-control" type="password" name="smtp_pass" />
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="smtp_tls" id="smtp_tls" checked />
+          <label class="form-check-label" for="smtp_tls">Use STARTTLS</label>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <h5>IMAP (Incoming Mail)</h5>
+        <div class="mb-3">
+          <label class="form-label">Host</label>
+          <input class="form-control" name="imap_host" placeholder="imap.gmail.com" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Port</label>
+          <input class="form-control" name="imap_port" value="993" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Username (your email)</label>
+          <input class="form-control" name="imap_user" placeholder="you@example.com" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password / App Password</label>
+          <input class="form-control" type="password" name="imap_pass" />
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="imap_ssl" id="imap_ssl" checked />
+          <label class="form-check-label" for="imap_ssl">Use SSL</label>
+        </div>
+      </div>
+    </div>
+    <div class="mt-2">
+      <button class="btn btn-secondary" type="submit">Login (Advanced)</button>
+    </div>
+  </details>
+</form>
+{% endblock %}

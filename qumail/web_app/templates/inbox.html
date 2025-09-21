@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center">
+  <h3>Inbox</h3>
+  <a class="btn btn-success" href="{{ url_for('compose') }}">Compose</a>
+</div>
+<table class="table table-striped mt-3">
+  <thead>
+    <tr>
+      <th>UID</th>
+      <th>Subject</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for uid, subject in items %}
+    <tr>
+      <td>{{ uid }}</td>
+      <td>{{ subject }}</td>
+      <td><a class="btn btn-sm btn-primary" href="{{ url_for('message', uid=uid) }}">Open</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

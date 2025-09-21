@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>Compose</h3>
+<form method="post" enctype="multipart/form-data" class="mt-3">
+  <div class="mb-3">
+    <label class="form-label">From</label>
+    <input class="form-control" name="from" value="" placeholder="you@example.com" />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">To</label>
+    <input class="form-control" name="to" placeholder="recipient@example.com" />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Subject</label>
+    <input class="form-control" name="subject" />
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Security Level</label>
+    <select class="form-select" name="level">
+      <option value="4">4 - No Quantum Security (Plain)</option>
+      <option value="3">3 - PQC Placeholder (AES-GCM)</option>
+      <option value="2" selected>2 - Quantum-aided AES-GCM</option>
+      <option value="1">1 - Quantum Secure OTP</option>
+    </select>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Message</label>
+    <textarea class="form-control" rows="8" name="body"></textarea>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Attachments</label>
+    <input class="form-control" type="file" name="attachments" multiple />
+  </div>
+  <button class="btn btn-primary" type="submit">Send</button>
+</form>
+{% endblock %}
