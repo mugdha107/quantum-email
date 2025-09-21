@@ -1,8 +1,11 @@
 import base64
 import time
 from typing import Optional, Tuple
+from dataclasses import dataclass
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .config import KMConfig
 import hmac
@@ -19,10 +22,19 @@ class KMClient:
       - GET  /api/v1/status
     """
 
-    def __init__(self, cfg: KMConfig, timeout: float = 10.0):
+    def __init__(self, cfg: KMConfig):
         self.cfg = cfg
         self.session = requests.Session()
-        self.timeout = timeout
+        # Do not use system proxy vars for localhost
+        self.session.trust_env = False
+        # Robust retries for transient connection issues
+        retry = Retry(total=3, connect=3, read=3, backoff_factor=0.3,
+                      status_forcelist=(502, 503, 504))
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
+        # Increase timeout to accommodate slower hosts
+        self.timeout = 30.0
 
     def _hmac_hex(self, data: bytes) -> str:
         return hmac.new(self.cfg.integrity_secret.encode(), data, hashlib.sha256).hexdigest()
@@ -46,7 +58,27 @@ class KMClient:
         return r.json()
 
     def request_key_with_verify(self, length: Optional[int] = None) -> Tuple[str, bytes, bool]:
-        data = self.request_key(length)
+        """Request a new key and verify with HMAC.
+        Try GET first to avoid environments where POST stalls; fallback to POST.
+        """
+        params = {
+            "length": int(length or self.cfg.default_key_length),
+            "client_id": self.cfg.client_id,
+            "peer_id": self.cfg.peer_id,
+        }
+        data = None
+        # Fast attempt via GET with short timeout
+        try:
+            r = self.session.get(f"{self.cfg.base_url}/api/v1/keys/new", params=params, timeout=5.0)
+            r.raise_for_status()
+            data = r.json()
+        except Exception:
+            # Fallback to POST with normal timeout
+            try:
+                data = self.request_key(length)
+            except Exception:
+                # Re-raise last error for caller
+                raise
         key_id = data["key_id"]
         key_b = base64.b64decode(data.get("key_b64", ""))
         h = data.get("key_hmac", "")
@@ -78,3 +110,16 @@ class KMClient:
         h = data.get("slice_hmac", "")
         tampered = (self._hmac_hex(slice_b) != h)
         return int(data["offset"]), slice_b, tampered
+
+    def material_with_verify(self, key_id: str, nbytes: int, offset: int = 0) -> Tuple[int, bytes, bool]:
+        """Fetch a non-consuming slice of key material and verify integrity.
+        Requires KM simulator >= current version supporting /api/v1/material.
+        """
+        params = {"bytes": int(nbytes), "offset": int(offset)}
+        r = self.session.get(f"{self.cfg.base_url}/api/v1/material/{key_id}", params=params, timeout=self.timeout)
+        r.raise_for_status()
+        data = r.json()
+        slice_b = base64.b64decode(data["slice_b64"])
+        h = data.get("slice_hmac", "")
+        tampered = (self._hmac_hex(slice_b) != h)
+        return int(data.get("offset", 0)), slice_b, tampered

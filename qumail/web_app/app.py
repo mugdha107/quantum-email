@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Optional, List, Tuple
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, render_template_string, request, redirect, url_for, session, flash
 
 from ..app.services.config import KMConfig, SMTPConfig, IMAPConfig
 from ..app.services.km_client import KMClient
@@ -157,6 +157,21 @@ def create_app() -> Flask:
         if not ctx:
             return redirect(url_for("login"))
         if request.method == "POST":
+            # KM preflight: check status (hard requirement) and quick keys/new (soft check)
+            try:
+                ok = km.status()
+            except Exception as e:
+                ok = False
+            if not ok:
+                flash(f"KM not reachable at {km.cfg.base_url}. Please ensure KM is running and KM_BASE_URL matches.", "danger")
+                return render_template("compose.html")
+            # quick GET test to avoid POST stalls (soft check)
+            try:
+                _r = km.session.get(f"{km.cfg.base_url}/api/v1/keys/new", params={"length": 8}, timeout=5.0)
+                _r.raise_for_status()
+            except Exception as e:
+                # Warn but proceed; the actual key request will still try with fallback
+                flash(f"KM quick test warning at {km.cfg.base_url}/api/v1/keys/new: {e}", "warning")
             sender = (request.form.get("from", "").strip() or ctx.smtp.username).strip()
             to_raw = request.form.get("to", "").strip()
             subject = request.form.get("subject", "").strip()
@@ -186,7 +201,7 @@ def create_app() -> Flask:
                     key_bytes = 64
             except Exception as e:
                 if level != 4:
-                    flash(f"KM error: {e}", "danger")
+                    flash(f"KM error (base {km.cfg.base_url}): {e}", "danger")
                     return render_template("compose.html")
 
             try:
@@ -253,9 +268,15 @@ def create_app() -> Flask:
                     qkd_bytes = kb
                     tampered_detected = tampered_detected or t
             elif level in (2, 3):
-                kid, kb, t = km.request_key_with_verify(length=64)
-                qkd_bytes = kb
-                tampered_detected = tampered_detected or t
+                if key_id and key_bytes_hdr:
+                    need = int(key_bytes_hdr)
+                    offset, slice_b, t = km.consume_with_verify(key_id, need)
+                    qkd_bytes = slice_b
+                    tampered_detected = tampered_detected or t
+                else:
+                    kid, kb, t = km.request_key_with_verify(length=64)
+                    qkd_bytes = kb
+                    tampered_detected = tampered_detected or t
         except Exception as e:
             flash(f"KM error: {e}", "danger")
             return redirect(url_for("inbox"))
@@ -264,5 +285,33 @@ def create_app() -> Flask:
         if tampered_detected:
             flash("Possible Intrusion Detected: Key integrity mismatch", "danger")
         return render_template("message.html", msg=msg, body=body, attachments=attachments)
+
+    @app.route("/diag")
+    def diag():
+        info = {"km_base_url": km.cfg.base_url}
+        # Ping status
+        try:
+            r = km.session.get(f"{km.cfg.base_url}/api/v1/status", timeout=5.0)
+            info["status_ok"] = (r.status_code == 200)
+            info["status_json"] = r.json()
+        except Exception as e:
+            info["status_error"] = str(e)
+        # Test keys/new
+        try:
+            r2 = km.session.get(f"{km.cfg.base_url}/api/v1/keys/new", params={"length": 8}, timeout=5.0)
+            info["keys_new_ok"] = (r2.status_code == 200)
+            info["keys_new_keys"] = list((r2.json() or {}).keys())
+        except Exception as e:
+            info["keys_new_error"] = str(e)
+        # Proxy env snapshot (server-side)
+        import os as _os
+        info["env_NO_PROXY"] = _os.getenv("NO_PROXY")
+        info["env_HTTP_PROXY"] = _os.getenv("HTTP_PROXY")
+        info["env_HTTPS_PROXY"] = _os.getenv("HTTPS_PROXY")
+        return render_template_string("""
+            <h3>Diagnostics</h3>
+            <pre>{{ info|tojson(indent=2) }}</pre>
+            <p><a href="{{ url_for('inbox') }}">Back</a></p>
+        """, info=info)
 
     return app

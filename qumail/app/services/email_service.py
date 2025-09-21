@@ -6,6 +6,7 @@ import ssl
 import imaplib
 import email
 from email.message import EmailMessage
+from email import policy
 from typing import List, Tuple, Optional
 
 from .config import SMTPConfig, IMAPConfig
@@ -65,12 +66,16 @@ class EmailService:
         for fname, data in attachments:
             aenc = crypto_service.encrypt(level, data, qkd_key_material)
             maintype, subtype = (mimetypes.guess_type(fname)[0] or "application/octet-stream").split("/")
-            # Store encrypted attachment
+            # Store encrypted attachment with per-part metadata header
+            part_headers = []
+            if aenc.metadata:
+                part_headers.append(("X-QuMail-Meta", base64.b64encode(str(aenc.metadata).encode()).decode()))
             msg.add_attachment(
                 aenc.ciphertext,
                 maintype=maintype,
                 subtype=subtype,
                 filename=fname + ".enc",
+                headers=part_headers or None,
             )
 
         # Send via SMTP
@@ -125,7 +130,8 @@ class EmailService:
             typ, msg_data = M.fetch(uid, '(RFC822)')
             if typ != 'OK':
                 return None
-            return email.message_from_bytes(msg_data[0][1])
+            # Use modern policy so we get EmailMessage with iter_attachments()
+            return email.message_from_bytes(msg_data[0][1], policy=policy.default)
         finally:
             try:
                 M.logout()
@@ -166,8 +172,8 @@ class EmailService:
                 except Exception:
                     dec_body = "<binary body>"
             else:
-                # Decrypt attachment assuming same level
-                meta_b64 = msg.get('X-QuMail-Meta')
+                # Decrypt attachment assuming same level; prefer per-part metadata
+                meta_b64 = part.get('X-QuMail-Meta') or msg.get('X-QuMail-Meta')
                 meta = {}
                 if meta_b64:
                     try:
